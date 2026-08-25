@@ -274,7 +274,17 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: '服务器内部错误' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log('远程天文台系统已启动: http://localhost:' + PORT);
   console.log('管理员账号: admin / admin123');
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error('【错误】端口 ' + PORT + ' 已被占用。');
+    console.error('请先关闭占用该端口的进程，或使用其他端口启动，例如：');
+    console.error('  PORT=3001 npm start');
+    process.exit(1);
+  }
+  throw err;
 });
