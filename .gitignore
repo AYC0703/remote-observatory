@@ -1,0 +1,10 @@
+# 依赖与缓存
+node_modules/
+.npm-cache/
+
+# 运行时生成的 SQLite 数据库
+data/
+
+# 日志与系统文件
+*.log
+.DS_Store

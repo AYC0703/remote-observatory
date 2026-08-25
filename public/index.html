@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>远程天文台使用申请审批及统计系统</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app" v-cloak>
+
+    <!-- ===================== 未登录 ===================== -->
+    <div v-if="!user" class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-logo">🔭</div>
+        <h1>远程天文台使用申请系统</h1>
+        <p class="auth-sub">观测申请 · 审批管理 · 统计分析</p>
+        <div class="auth-tabs">
+          <button type="button" :class="{active: authMode==='login'}" @click="switchAuth('login')">登录</button>
+          <button type="button" :class="{active: authMode==='register'}" @click="switchAuth('register')">注册</button>
+        </div>
+        <div v-if="authError" class="alert alert-error">{{authError}}</div>
+
+        <form v-if="authMode==='login'" @submit.prevent="login">
+          <div class="field">
+            <label>用户名</label>
+            <input type="text" v-model.trim="loginForm.username" placeholder="请输入用户名" required>
+          </div>
+          <div class="field">
+            <label>密码</label>
+            <input type="password" v-model="loginForm.password" placeholder="请输入密码" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" :disabled="authLoading">{{authLoading ? '登录中…' : '登录'}}</button>
+        </form>
+
+        <form v-else @submit.prevent="register">
+          <div class="field">
+            <label>用户名 <span class="muted">(3-20位，字母/数字/下划线)</span></label>
+            <input type="text" v-model.trim="registerForm.username" placeholder="请输入用户名" required>
+          </div>
+          <div class="field">
+            <label>显示名称</label>
+            <input type="text" v-model.trim="registerForm.name" placeholder="您的姓名或昵称">
+          </div>
+          <div class="field">
+            <label>密码 <span class="muted">(至少6位)</span></label>
+            <input type="password" v-model="registerForm.password" placeholder="请输入密码" required>
+          </div>
+          <div class="field">
+            <label>确认密码</label>
+            <input type="password" v-model="registerForm.confirm" placeholder="再次输入密码" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" :disabled="authLoading">{{authLoading ? '注册中…' : '注册并登录'}}</button>
+        </form>
+        <p class="hint">演示管理员账号：<code>admin</code> / <code>admin123</code></p>
+      </div>
+    </div>
+
+    <!-- ===================== 已登录 ===================== -->
+    <div v-else class="app-wrap">
+      <header class="topbar">
+        <div class="topbar-title">🔭 远程天文台使用申请审批及统计系统</div>
+        <div class="topbar-user">
+          <span class="badge" :class="user.role==='admin' ? 'badge-admin' : 'badge-user'">{{user.role==='admin' ? '管理员' : '普通用户'}}</span>
+          <span class="topbar-name">{{user.name}}</span>
+          <button type="button" class="btn btn-ghost btn-sm" @click="logout">退出登录</button>
+        </div>
+      </header>
+
+      <nav class="main-nav">
+        <template v-if="user.role==='user'">
+          <button type="button" :class="{active: currentView==='submit'}" @click="go('submit')">📝 提交申请</button>
+          <button type="button" :class="{active: currentView==='mine'}" @click="go('mine')">📋 我的申请</button>
+        </template>
+        <template v-else>
+          <button type="button" :class="{active: currentView==='pending'}" @click="go('pending')">⏳ 待审批</button>
+          <button type="button" :class="{active: currentView==='all'}" @click="go('all')">🗂 全部申请</button>
+          <button type="button" :class="{active: currentView==='calendar'}" @click="go('calendar')">📅 时段日历</button>
+          <button type="button" :class="{active: currentView==='stats'}" @click="go('stats')">📊 统计分析</button>
+        </template>
+      </nav>
+
+      <main class="main-content">
+
+        <!-- ============ 用户：提交申请 ============ -->
+        <section v-if="currentView==='submit'" class="card">
+          <h2>提交观测申请</h2>
+          <p class="muted">请填写使用时段与拍摄信息，提交后将进入管理员审批队列。</p>
+          <form @submit.prevent="submitApplication" class="form-grid">
+            <div class="field">
+              <label>观测设备 <span class="req">*</span></label>
+              <select v-model="form.device" required @change="checkConflictNow">
+                <option value="" disabled>请选择设备</option>
+                <option v-for="d in devices" :key="d" :value="d">{{d}}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>申请人姓名 <span class="req">*</span></label>
+              <input type="text" v-model.trim="form.applicant_name" placeholder="申请人姓名" required>
+            </div>
+            <div class="field">
+              <label>开始时间 <span class="req">*</span></label>
+              <input type="datetime-local" v-model="form.start_time" :min="minDateTime" required @change="checkConflictNow">
+            </div>
+            <div class="field">
+              <label>结束时间 <span class="req">*</span></label>
+              <input type="datetime-local" v-model="form.end_time" :min="form.start_time || minDateTime" required @change="checkConflictNow">
+            </div>
+            <div class="field">
+              <label>联系方式 <span class="req">*</span></label>
+              <input type="text" v-model.trim="form.applicant_contact" placeholder="手机号 / 邮箱" required>
+            </div>
+            <div class="field field-full">
+              <label>拍摄目标 <span class="req">*</span></label>
+              <input type="text" v-model.trim="form.target" placeholder="例如：M31 仙女座星系、木星、NGC 2244 等" required>
+            </div>
+            <div class="field field-full">
+              <label>拍摄目的 <span class="req">*</span></label>
+              <textarea v-model.trim="form.purpose" rows="3" placeholder="请简要说明本次观测的科学目标或拍摄目的" required></textarea>
+            </div>
+            <div v-if="formError" class="alert alert-error field-full">{{formError}}</div>
+            <div v-if="conflicts.length" class="alert alert-warn field-full">
+              <strong>⚠️ 时段冲突提示：</strong>该设备所选时段已被以下申请占用：
+              <ul class="conflict-list">
+                <li v-for="c in conflicts" :key="c.id">{{c.app_no}}（{{fmtDateTime(c.start_time)}} ~ {{fmtDateTime(c.end_time)}}，{{statusLabel(c.status)}}）</li>
+              </ul>
+              <span>提交将被拒绝，请调整时段。</span>
+            </div>
+            <div class="field-full actions">
+              <button type="submit" class="btn btn-primary" :disabled="submitting || conflicts.length">{{submitting ? '提交中…' : '提交申请'}}</button>
+              <button type="button" class="btn btn-ghost" @click="resetForm">重置</button>
+            </div>
+          </form>
+        </section>
+
+        <!-- ============ 用户：我的申请 ============ -->
+        <section v-else-if="currentView==='mine'" class="card">
+          <h2>我的申请</h2>
+          <p class="muted">共 {{mineList.length}} 条申请记录，状态实时更新。</p>
+          <div v-if="!mineList.length" class="empty">暂无申请记录，快去提交第一条申请吧。</div>
+          <table v-else class="table">
+            <thead><tr><th>申请编号</th><th>设备</th><th>使用时段</th><th>拍摄目标</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="a in mineList" :key="a.id">
+                <td class="mono">{{a.app_no}}</td>
+                <td>{{a.device}}</td>
+                <td class="nowrap">{{fmtDateTime(a.start_time)}} ~ {{fmtDateTime(a.end_time)}}</td>
+                <td>{{a.target}}</td>
+                <td><span class="status" :class="'st-'+a.status">{{statusLabel(a.status)}}</span></td>
+                <td class="nowrap">{{fmtDateTime(a.created_at)}}</td>
+                <td class="nowrap">
+                  <button type="button" class="btn btn-sm" @click="openDetail(a.id)">详情</button>
+                  <button v-if="a.status==='pending'" type="button" class="btn btn-sm btn-warn" @click="withdraw(a)">撤回</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- ============ 管理员：待审批 ============ -->
+        <section v-else-if="currentView==='pending'" class="card">
+          <h2>待审批申请 <span class="pill">{{pendingList.length}}</span></h2>
+          <p class="muted">按申请提交时间升序排列，请及时处理。</p>
+          <div v-if="!pendingList.length" class="empty">暂无待审批申请。</div>
+          <table v-else class="table">
+            <thead><tr><th>申请编号</th><th>申请人</th><th>设备</th><th>使用时段</th><th>拍摄目标</th><th>提交时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="a in pendingList" :key="a.id">
+                <td class="mono">{{a.app_no}}</td>
+                <td>{{a.applicant_name}}</td>
+                <td>{{a.device}}</td>
+                <td class="nowrap">{{fmtDateTime(a.start_time)}} ~ {{fmtDateTime(a.end_time)}}</td>
+                <td>{{a.target}}</td>
+                <td class="nowrap">{{fmtDateTime(a.created_at)}}</td>
+                <td class="nowrap">
+                  <button type="button" class="btn btn-sm" @click="openDetail(a.id)">详情</button>
+                  <button type="button" class="btn btn-sm btn-success" @click="openReview(a, 'approve')">同意</button>
+                  <button type="button" class="btn btn-sm btn-danger" @click="openReview(a, 'reject')">不同意</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- ============ 管理员：全部申请 ============ -->
+        <section v-else-if="currentView==='all'" class="card">
+          <div class="list-toolbar">
+            <h2>全部申请</h2>
+            <div class="toolbar-controls">
+              <select v-model="allFilter.status" @change="resetAllPage">
+                <option value="">全部状态</option>
+                <option value="pending">待审批</option>
+                <option value="approved">已通过</option>
+                <option value="rejected">未通过</option>
+                <option value="withdrawn">已撤回</option>
+              </select>
+              <input type="text" v-model.trim="allFilter.search" placeholder="搜索编号/申请人/目标/设备" @keyup.enter="resetAllPage">
+              <button type="button" class="btn btn-sm" @click="resetAllPage">查询</button>
+            </div>
+          </div>
+          <div v-if="!allList.length" class="empty">无符合条件的申请。</div>
+          <table v-else class="table">
+            <thead><tr><th>申请编号</th><th>申请人</th><th>设备</th><th>使用时段</th><th>拍摄目标</th><th>状态</th><th>提交时间</th><th>审批人</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="a in allList" :key="a.id">
+                <td class="mono">{{a.app_no}}</td>
+                <td>{{a.applicant_name}}</td>
+                <td>{{a.device}}</td>
+                <td class="nowrap">{{fmtDateTime(a.start_time)}} ~ {{fmtDateTime(a.end_time)}}</td>
+                <td>{{a.target}}</td>
+                <td><span class="status" :class="'st-'+a.status">{{statusLabel(a.status)}}</span></td>
+                <td class="nowrap">{{fmtDateTime(a.created_at)}}</td>
+                <td>{{a.reviewer_name || '—'}}</td>
+                <td class="nowrap"><button type="button" class="btn btn-sm" @click="openDetail(a.id)">详情</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="allTotal > allPageSize" class="pagination">
+            <button type="button" class="btn btn-sm" :disabled="allPage<=1" @click="changePage(-1)">上一页</button>
+            <span>第 {{allPage}} / {{totalPages}} 页（共 {{allTotal}} 条）</span>
+            <button type="button" class="btn btn-sm" :disabled="allPage>=totalPages" @click="changePage(1)">下一页</button>
+          </div>
+        </section>
+
+        <!-- ============ 管理员：时段日历 ============ -->
+        <section v-else-if="currentView==='calendar'" class="card">
+          <h2>设备时段占用日历</h2>
+          <p class="muted">展示各设备已被占用（待审批 + 已通过）的时段，绿色为已通过、黄色为待审批。</p>
+          <div v-if="!calendarSlots.length" class="empty">当前无占用时段。</div>
+          <div v-for="dev in devices" :key="dev" class="cal-device">
+            <h3>🔭 {{dev}}</h3>
+            <div v-if="!slotsForDevice(dev).length" class="cal-empty">暂无占用</div>
+            <div v-else class="cal-slots">
+              <div v-for="s in slotsForDevice(dev)" :key="s.id" class="cal-slot" :class="s.status==='approved' ? 'slot-approved' : 'slot-pending'">
+                <span class="mono">{{s.app_no}}</span>
+                <span>{{fmtDateTime(s.start_time)}} ~ {{fmtDateTime(s.end_time)}}</span>
+                <span class="status" :class="'st-'+s.status">{{statusLabel(s.status)}}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ 管理员：统计分析 ============ -->
+        <section v-else-if="currentView==='stats'" class="card">
+          <div class="list-toolbar">
+            <h2>统计分析</h2>
+            <button type="button" class="btn btn-primary btn-sm" @click="exportCsv">⬇ 导出 CSV 报表</button>
+          </div>
+          <div class="stat-cards">
+            <div class="stat-card"><div class="stat-num">{{stats.total}}</div><div class="stat-label">申请总数</div></div>
+            <div class="stat-card st-pending"><div class="stat-num">{{stats.counts.pending}}</div><div class="stat-label">待审批</div></div>
+            <div class="stat-card st-approved"><div class="stat-num">{{stats.counts.approved}}</div><div class="stat-label">已通过</div></div>
+            <div class="stat-card st-rejected"><div class="stat-num">{{stats.counts.rejected}}</div><div class="stat-label">未通过</div></div>
+            <div class="stat-card st-withdrawn"><div class="stat-num">{{stats.counts.withdrawn}}</div><div class="stat-label">已撤回</div></div>
+            <div class="stat-card st-rate"><div class="stat-num">{{stats.approveRate}}%</div><div class="stat-label">通过率</div></div>
+          </div>
+          <div class="charts-grid">
+            <div class="chart-box"><h3>状态分布</h3><canvas id="statusChart" height="240"></canvas></div>
+            <div class="chart-box"><h3>各设备申请量</h3><canvas id="deviceChart" height="240"></canvas></div>
+            <div class="chart-box chart-full"><h3>月度申请趋势</h3><canvas id="trendChart" height="200"></canvas></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ===================== Toast ===================== -->
+    <transition name="toast">
+      <div v-if="toast.visible" class="toast" :class="'toast-'+toast.type">{{toast.message}}</div>
+    </transition>
+
+    <!-- ===================== 详情弹窗 ===================== -->
+    <div v-if="detailApp" class="modal-mask" @click.self="detailApp=null">
+      <div class="modal">
+        <div class="modal-head"><h3>申请详情</h3><button type="button" class="modal-close" @click="detailApp=null">✕</button></div>
+        <div class="modal-body" v-if="detailApp">
+          <div class="detail-grid">
+            <div><label>申请编号</label><div class="mono">{{detailApp.app_no}}</div></div>
+            <div><label>状态</label><div><span class="status" :class="'st-'+detailApp.status">{{statusLabel(detailApp.status)}}</span></div></div>
+            <div><label>申请人</label><div>{{detailApp.applicant_name}}（{{detailApp.applicant_username}}）</div></div>
+            <div><label>联系方式</label><div>{{detailApp.applicant_contact}}</div></div>
+            <div><label>观测设备</label><div>{{detailApp.device}}</div></div>
+            <div><label>使用时段</label><div>{{fmtDateTime(detailApp.start_time)}} ~ {{fmtDateTime(detailApp.end_time)}}</div></div>
+            <div class="detail-full"><label>拍摄目标</label><div>{{detailApp.target}}</div></div>
+            <div class="detail-full"><label>拍摄目的</label><div>{{detailApp.purpose}}</div></div>
+            <div><label>提交时间</label><div>{{fmtDateTime(detailApp.created_at)}}</div></div>
+            <div><label>审批时间</label><div>{{detailApp.reviewed_at ? fmtDateTime(detailApp.reviewed_at) : '—'}}</div></div>
+            <div><label>审批人</label><div>{{detailApp.reviewer_name || '—'}}</div></div>
+            <div class="detail-full"><label>审批意见</label><div>{{detailApp.review_comment || '—'}}</div></div>
+          </div>
+          <h4 class="timeline-title">状态变更记录</h4>
+          <ol class="timeline">
+            <li v-for="(h, i) in detailHistory" :key="h.id">
+              <div class="tl-dot"></div>
+              <div class="tl-body">
+                <div class="tl-head">
+                  <strong>{{actionLabel(h.action)}}</strong>
+                  <span v-if="h.from_status">{{statusLabel(h.from_status)}} → {{statusLabel(h.to_status)}}</span>
+                  <span v-else>→ {{statusLabel(h.to_status)}}</span>
+                </div>
+                <div class="muted tl-meta">{{fmtDateTime(h.created_at)}} · {{h.operator_name || '系统'}}</div>
+                <div v-if="h.comment" class="tl-comment">意见：{{h.comment}}</div>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 审批弹窗 ===================== -->
+    <div v-if="reviewApp" class="modal-mask" @click.self="closeReview">
+      <div class="modal">
+        <div class="modal-head"><h3>{{reviewApp.action==='approve' ? '同意申请' : '驳回申请'}}</h3><button type="button" class="modal-close" @click="closeReview">✕</button></div>
+        <div class="modal-body">
+          <div class="review-summary">
+            <div><label>编号</label><span class="mono">{{reviewApp.app.app_no}}</span></div>
+            <div><label>申请人</label><span>{{reviewApp.app.applicant_name}}</span></div>
+            <div><label>设备</label><span>{{reviewApp.app.device}}</span></div>
+            <div><label>时段</label><span>{{fmtDateTime(reviewApp.app.start_time)}} ~ {{fmtDateTime(reviewApp.app.end_time)}}</span></div>
+            <div><label>目标</label><span>{{reviewApp.app.target}}</span></div>
+          </div>
+          <div v-if="reviewApp.conflicts.length" class="alert alert-warn">
+            <strong>⚠️ 冲突警告：</strong>
+            <ul class="conflict-list">
+              <li v-for="c in reviewApp.conflicts" :key="c.id">{{c.app_no}}（{{fmtDateTime(c.start_time)}} ~ {{fmtDateTime(c.end_time)}}，{{statusLabel(c.status)}}）</li>
+            </ul>
+            <label class="checkbox"><input type="checkbox" v-model="reviewApp.force"> 我已知晓冲突，仍要强制通过</label>
+          </div>
+          <div class="field">
+            <label>审批意见 <span v-if="reviewApp.action==='reject'" class="req">*（拒绝必填）</span></label>
+            <textarea v-model.trim="reviewApp.comment" rows="3" placeholder="填写审批意见，如拒绝原因、注意事项等"></textarea>
+          </div>
+          <div v-if="reviewApp.error" class="alert alert-error">{{reviewApp.error}}</div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost" @click="closeReview">取消</button>
+          <button type="button" class="btn" :class="reviewApp.action==='approve' ? 'btn-success' : 'btn-danger'" :disabled="reviewApp.submitting" @click="doReview">{{reviewApp.submitting ? '提交中…' : (reviewApp.action==='approve' ? '确认同意' : '确认驳回')}}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/vendor/vue.global.prod.js"></script>
+  <script src="/vendor/chart.umd.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
