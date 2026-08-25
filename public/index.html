@@ -77,6 +77,7 @@
           <button type="button" :class="{active: currentView==='all'}" @click="go('all')">🗂 全部申请</button>
           <button type="button" :class="{active: currentView==='calendar'}" @click="go('calendar')">📅 时段日历</button>
           <button type="button" :class="{active: currentView==='stats'}" @click="go('stats')">📊 统计分析</button>
+          <button type="button" :class="{active: currentView==='audit'}" @click="go('audit')">📜 审计日志</button>
         </template>
       </nav>
 
@@ -259,6 +260,27 @@
             <div class="chart-box"><h3>各设备申请量</h3><canvas id="deviceChart" height="240"></canvas></div>
             <div class="chart-box chart-full"><h3>月度申请趋势</h3><canvas id="trendChart" height="200"></canvas></div>
           </div>
+        </section>
+
+        <!-- ============ 管理员：审计日志 ============ -->
+        <section v-else-if="currentView==='audit'" class="card">
+          <div class="list-toolbar">
+            <h2>操作审计日志</h2>
+            <button type="button" class="btn btn-ghost btn-sm" @click="loadAudit">🔄 刷新</button>
+          </div>
+          <p class="muted">记录系统中所有关键操作（登录、注册、提交、审批、撤回等），最多显示最近 200 条。</p>
+          <div v-if="!auditLogs.length" class="empty">暂无审计日志。</div>
+          <table v-else class="table">
+            <thead><tr><th>时间</th><th>操作人</th><th>操作类型</th><th>详情</th></tr></thead>
+            <tbody>
+              <tr v-for="log in auditLogs" :key="log.id">
+                <td class="nowrap mono">{{fmtDateTime(log.created_at)}}</td>
+                <td>{{log.username}}<span class="muted" v-if="log.user_id">（#{{log.user_id}}）</span></td>
+                <td><span class="audit-action">{{auditActionLabel(log.action)}}</span></td>
+                <td>{{log.detail}}</td>
+              </tr>
+            </tbody>
+          </table>
         </section>
       </main>
     </div>

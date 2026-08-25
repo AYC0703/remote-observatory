@@ -1,5 +1,6 @@
 const STATUS_LABEL = { pending: '待审批', approved: '已通过', rejected: '未通过', withdrawn: '已撤回' };
 const ACTION_LABEL = { submit: '提交申请', approve: '审批通过', reject: '审批拒绝', withdraw: '撤回申请' };
+const AUDIT_ACTION_LABEL = { register: '用户注册', login: '登录系统', logout: '退出登录', submit_application: '提交申请', withdraw_application: '撤回申请', approve_application: '通过申请', reject_application: '拒绝申请' };
 
 async function api(path, options) {
   const opts = options || {};
@@ -55,6 +56,7 @@ const app = Vue.createApp({
       detailApp: null,
       detailHistory: [],
       reviewApp: null,
+      auditLogs: [],
       charts: {}
     };
   },
@@ -75,6 +77,7 @@ const app = Vue.createApp({
     },
     statusLabel: function (s) { return STATUS_LABEL[s] || s; },
     actionLabel: function (a) { return ACTION_LABEL[a] || a; },
+    auditActionLabel: function (a) { return AUDIT_ACTION_LABEL[a] || a; },
 
     showToast: function (message, type) {
       const self = this;
@@ -152,6 +155,7 @@ const app = Vue.createApp({
       else if (view === 'all') this.loadAll();
       else if (view === 'calendar') this.loadCalendar();
       else if (view === 'stats') { const self = this; this.loadStats().then(function () { self.renderCharts(); }); }
+      else if (view === 'audit') this.loadAudit();
     },
 
     checkConflictNow: function () {
@@ -234,6 +238,10 @@ const app = Vue.createApp({
 
     async loadStats() {
       try { this.stats = await api('/api/admin/stats'); } catch (e) { this.showToast(e.message, 'error'); }
+    },
+
+    async loadAudit() {
+      try { const d = await api('/api/admin/audit'); this.auditLogs = d.logs || []; } catch (e) { this.showToast(e.message, 'error'); }
     },
 
     renderCharts: function () {
