@@ -57,6 +57,11 @@ const SCHEMA = [
   '  action TEXT NOT NULL,',
   '  detail TEXT,',
   '  created_at TEXT NOT NULL',
+  ');',
+  'CREATE TABLE IF NOT EXISTS devices (',
+  '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+  '  name TEXT NOT NULL UNIQUE,',
+  '  created_at TEXT NOT NULL',
   ');'
 ].join('\n');
 
@@ -90,5 +95,16 @@ function seedAdmin() {
   }
 }
 seedAdmin();
+
+function seedDevices() {
+  const count = db.prepare('SELECT COUNT(*) AS c FROM devices').get().c;
+  if (count === 0) {
+    const defaults = ['望远镜A（0.5米）', '望远镜B（0.8米）', '望远镜C（1.2米）', '射电望远镜'];
+    const ins = db.prepare('INSERT INTO devices (name, created_at) VALUES (?, ?)');
+    defaults.forEach(function (n) { ins.run(n, now()); });
+    console.log('[seed] 已初始化默认观测设备');
+  }
+}
+seedDevices();
 
 module.exports = { db, now, hashPassword, verifyPassword };

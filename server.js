@@ -6,7 +6,6 @@ const { db, now, hashPassword, verifyPassword } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const DEVICES = ['望远镜A（0.5米）', '望远镜B（0.8米）', '望远镜C（1.2米）', '射电望远镜'];
 const STATUS_LABEL = { pending: '待审批', approved: '已通过', rejected: '未通过', withdrawn: '已撤回' };
 
 app.use(express.json({ limit: '1mb' }));
@@ -103,7 +102,10 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user: req.session.user || null });
 });
 
-app.get('/api/devices', (req, res) => res.json({ devices: DEVICES }));
+app.get('/api/devices', (req, res) => {
+  const devices = db.prepare('SELECT d.id, d.name, (SELECT COUNT(*) FROM applications a WHERE a.device = d.name) AS count FROM devices d ORDER BY d.id').all();
+  res.json({ devices });
+});
 
 // ---------- 用户：申请 ----------
 app.get('/api/applications/conflicts', requireAuth, (req, res) => {
@@ -123,7 +125,7 @@ app.post('/api/applications', requireAuth, (req, res) => {
   const purpose = String(b.purpose || '').trim();
   const applicantName = String(b.applicant_name || '').trim();
   const applicantContact = String(b.applicant_contact || '').trim();
-  if (!device || !DEVICES.includes(device)) return res.status(400).json({ error: '请选择有效的观测设备' });
+  if (!device || !db.prepare('SELECT id FROM devices WHERE name = ?').get(device)) return res.status(400).json({ error: '请选择有效的观测设备' });
   if (!startTime || !endTime) return res.status(400).json({ error: '请填写完整的使用时段' });
   if (startTime >= endTime) return res.status(400).json({ error: '结束时间必须晚于开始时间' });
   if (startTime < new Date().toISOString().slice(0, 16)) return res.status(400).json({ error: '不能选择过去的时段' });
@@ -169,6 +171,44 @@ app.post('/api/applications/:id/withdraw', requireAuth, (req, res) => {
   db.prepare('UPDATE applications SET status = ? WHERE id = ?').run('withdrawn', id);
   addHistory(id, 'pending', 'withdrawn', 'withdraw', req.session.user, null);
   addAudit(req.session.user, 'withdraw_application', '撤回申请 ' + row.app_no);
+  res.json({ ok: true });
+});
+
+// ---------- 管理员：设备管理 ----------
+app.post('/api/admin/devices', requireAdmin, (req, res) => {
+  const name = String((req.body || {}).name || '').trim();
+  if (!name) return res.status(400).json({ error: '设备名称不能为空' });
+  if (name.length > 50) return res.status(400).json({ error: '设备名称过长（最多 50 字）' });
+  const exists = db.prepare('SELECT id FROM devices WHERE name = ?').get(name);
+  if (exists) return res.status(409).json({ error: '该设备已存在' });
+  const info = db.prepare('INSERT INTO devices (name, created_at) VALUES (?, ?)').run(name, now());
+  addAudit(req.session.user, 'add_device', '添加设备 ' + name);
+  res.status(201).json({ ok: true, id: Number(info.lastInsertRowid), name });
+});
+
+app.put('/api/admin/devices/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const name = String((req.body || {}).name || '').trim();
+  if (!name) return res.status(400).json({ error: '设备名称不能为空' });
+  if (name.length > 50) return res.status(400).json({ error: '设备名称过长（最多 50 字）' });
+  const row = db.prepare('SELECT * FROM devices WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: '设备不存在' });
+  const dup = db.prepare('SELECT id FROM devices WHERE name = ? AND id != ?').get(name, id);
+  if (dup) return res.status(409).json({ error: '已存在同名设备' });
+  db.prepare('UPDATE applications SET device = ? WHERE device = ?').run(name, row.name);
+  db.prepare('UPDATE devices SET name = ? WHERE id = ?').run(name, id);
+  addAudit(req.session.user, 'rename_device', '重命名设备 ' + row.name + ' → ' + name);
+  res.json({ ok: true, id, name });
+});
+
+app.delete('/api/admin/devices/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT * FROM devices WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: '设备不存在' });
+  const count = db.prepare('SELECT COUNT(*) AS c FROM applications WHERE device = ?').get(row.name).c;
+  if (count > 0) return res.status(400).json({ error: '该设备已有 ' + count + ' 条申请记录，无法删除' });
+  db.prepare('DELETE FROM devices WHERE id = ?').run(id);
+  addAudit(req.session.user, 'delete_device', '删除设备 ' + row.name);
   res.json({ ok: true });
 });
 

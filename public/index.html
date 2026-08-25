@@ -78,6 +78,7 @@
           <button type="button" :class="{active: currentView==='calendar'}" @click="go('calendar')">📅 时段日历</button>
           <button type="button" :class="{active: currentView==='stats'}" @click="go('stats')">📊 统计分析</button>
           <button type="button" :class="{active: currentView==='audit'}" @click="go('audit')">📜 审计日志</button>
+          <button type="button" :class="{active: currentView==='devices'}" @click="go('devices')">🔧 设备管理</button>
         </template>
       </nav>
 
@@ -92,7 +93,7 @@
               <label>观测设备 <span class="req">*</span></label>
               <select v-model="form.device" required @change="checkConflictNow">
                 <option value="" disabled>请选择设备</option>
-                <option v-for="d in devices" :key="d" :value="d">{{d}}</option>
+                <option v-for="d in devices" :key="d.id" :value="d.name">{{d.name}}</option>
               </select>
             </div>
             <div class="field">
@@ -228,11 +229,11 @@
           <h2>设备时段占用日历</h2>
           <p class="muted">展示各设备已被占用（待审批 + 已通过）的时段，绿色为已通过、黄色为待审批。</p>
           <div v-if="!calendarSlots.length" class="empty">当前无占用时段。</div>
-          <div v-for="dev in devices" :key="dev" class="cal-device">
-            <h3>🔭 {{dev}}</h3>
-            <div v-if="!slotsForDevice(dev).length" class="cal-empty">暂无占用</div>
+          <div v-for="dev in devices" :key="dev.id" class="cal-device">
+            <h3>🔭 {{dev.name}}</h3>
+            <div v-if="!slotsForDevice(dev.name).length" class="cal-empty">暂无占用</div>
             <div v-else class="cal-slots">
-              <div v-for="s in slotsForDevice(dev)" :key="s.id" class="cal-slot" :class="s.status==='approved' ? 'slot-approved' : 'slot-pending'">
+              <div v-for="s in slotsForDevice(dev.name)" :key="s.id" class="cal-slot" :class="s.status==='approved' ? 'slot-approved' : 'slot-pending'">
                 <span class="mono">{{s.app_no}}</span>
                 <span>{{fmtDateTime(s.start_time)}} ~ {{fmtDateTime(s.end_time)}}</span>
                 <span class="status" :class="'st-'+s.status">{{statusLabel(s.status)}}</span>
@@ -278,6 +279,43 @@
                 <td>{{log.username}}<span class="muted" v-if="log.user_id">（#{{log.user_id}}）</span></td>
                 <td><span class="audit-action">{{auditActionLabel(log.action)}}</span></td>
                 <td>{{log.detail}}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- ============ 管理员：设备管理 ============ -->
+        <section v-else-if="currentView==='devices'" class="card">
+          <div class="list-toolbar">
+            <h2>观测设备管理</h2>
+          </div>
+          <p class="muted">管理可供申请的观测设备，新增 / 重命名会实时同步到普通用户的申请表单与占用日历。</p>
+          <div class="device-add">
+            <input type="text" v-model.trim="newDeviceName" placeholder="输入新设备名称，如：望远镜D（2.0米）" @keyup.enter="addDevice">
+            <button type="button" class="btn btn-primary" @click="addDevice" :disabled="addingDevice">{{addingDevice ? '添加中…' : '＋ 添加设备'}}</button>
+          </div>
+          <div v-if="deviceError" class="alert alert-error">{{deviceError}}</div>
+          <div v-if="!devices.length" class="empty">暂无设备，请先添加。</div>
+          <table v-else class="table">
+            <thead><tr><th>ID</th><th>设备名称</th><th>关联申请数</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="d in devices" :key="d.id">
+                <td class="mono">{{d.id}}</td>
+                <td>
+                  <input v-if="editingId === d.id" type="text" v-model.trim="editName" @keyup.enter="saveRename(d.id)" class="inline-input">
+                  <template v-else>{{d.name}}</template>
+                </td>
+                <td>{{d.count || 0}}</td>
+                <td class="nowrap">
+                  <template v-if="editingId === d.id">
+                    <button type="button" class="btn btn-sm btn-success" @click="saveRename(d.id)">保存</button>
+                    <button type="button" class="btn btn-sm btn-ghost" @click="cancelEdit">取消</button>
+                  </template>
+                  <template v-else>
+                    <button type="button" class="btn btn-sm" @click="startRename(d)">重命名</button>
+                    <button type="button" class="btn btn-sm btn-danger" @click="deleteDevice(d)">删除</button>
+                  </template>
+                </td>
               </tr>
             </tbody>
           </table>

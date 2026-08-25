@@ -57,6 +57,11 @@ const app = Vue.createApp({
       detailHistory: [],
       reviewApp: null,
       auditLogs: [],
+      newDeviceName: '',
+      editName: '',
+      editingId: null,
+      addingDevice: false,
+      deviceError: '',
       charts: {}
     };
   },
@@ -156,6 +161,7 @@ const app = Vue.createApp({
       else if (view === 'calendar') this.loadCalendar();
       else if (view === 'stats') { const self = this; this.loadStats().then(function () { self.renderCharts(); }); }
       else if (view === 'audit') this.loadAudit();
+      else if (view === 'devices') this.loadDevices();
     },
 
     checkConflictNow: function () {
@@ -242,6 +248,53 @@ const app = Vue.createApp({
 
     async loadAudit() {
       try { const d = await api('/api/admin/audit'); this.auditLogs = d.logs || []; } catch (e) { this.showToast(e.message, 'error'); }
+    },
+
+    async addDevice() {
+      const name = this.newDeviceName;
+      if (!name) { this.deviceError = '请输入设备名称'; return; }
+      this.deviceError = '';
+      this.addingDevice = true;
+      try {
+        await api('/api/admin/devices', { method: 'POST', body: { name: name } });
+        this.showToast('设备已添加：' + name, 'success');
+        this.newDeviceName = '';
+        await this.loadDevices();
+      } catch (e) { this.deviceError = e.message; }
+      finally { this.addingDevice = false; }
+    },
+
+    startRename: function (d) {
+      this.editingId = d.id;
+      this.editName = d.name;
+      this.deviceError = '';
+    },
+
+    cancelEdit: function () {
+      this.editingId = null;
+      this.editName = '';
+    },
+
+    async saveRename(id) {
+      const name = this.editName;
+      if (!name) { this.deviceError = '设备名称不能为空'; return; }
+      this.deviceError = '';
+      try {
+        await api('/api/admin/devices/' + id, { method: 'PUT', body: { name: name } });
+        this.showToast('设备已重命名', 'success');
+        this.cancelEdit();
+        await this.loadDevices();
+        this.loadCalendar();
+      } catch (e) { this.deviceError = e.message; }
+    },
+
+    async deleteDevice(d) {
+      if (!confirm('确定删除设备「' + d.name + '」吗？')) return;
+      try {
+        await api('/api/admin/devices/' + d.id, { method: 'DELETE' });
+        this.showToast('设备已删除', 'success');
+        await this.loadDevices();
+      } catch (e) { this.showToast(e.message, 'error'); }
     },
 
     renderCharts: function () {
