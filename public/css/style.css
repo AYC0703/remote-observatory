@@ -176,7 +176,67 @@ input, select, textarea { font-family: inherit; }
 .tl-comment { background: var(--bg2); border-radius: 6px; padding: 8px 10px; margin-top: 6px; font-size: 0.88em; }
 
 @media (max-width: 720px) {
+  /* 防止 iOS 聚焦输入框时自动缩放 */
+  input, select, textarea { font-size: 16px; }
+
+  /* 顶栏 */
+  .topbar { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .topbar-title { font-size: 0.95rem; }
+  .topbar-user { gap: 8px; }
+
+  /* 导航：横向滑动 */
+  .main-nav { padding: 8px 12px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; gap: 4px; }
+  .main-nav button { flex-shrink: 0; white-space: nowrap; padding: 8px 14px; font-size: 0.88em; }
+
+  .main-content { padding: 12px; }
+  .card { padding: 16px; }
+  .card h2 { font-size: 1.1rem; }
+
+  /* 表单 / 弹窗网格单列 */
   .form-grid, .detail-grid, .charts-grid, .review-summary { grid-template-columns: 1fr; }
-  .main-content { padding: 14px; }
-  .table { font-size: 0.82em; }
+
+  /* 表格：横向滚动 */
+  .table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; font-size: 0.85em; }
+  .table th, .table td { white-space: nowrap; }
+  .table td:not(.mono):not(.nowrap) { white-space: normal; max-width: 220px; word-break: break-word; }
+  .table::-webkit-scrollbar { height: 6px; }
+  .table::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* 列表工具栏 */
+  .list-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .toolbar-controls { flex-wrap: wrap; }
+  .toolbar-controls select, .toolbar-controls input { flex: 1 1 40%; min-width: 0; }
+
+  /* 认证卡片 */
+  .auth-card { padding: 24px 18px; }
+  .auth-card h1 { font-size: 1.15rem; }
+
+  /* 弹窗 */
+  .modal { max-width: 100%; margin: 12px; max-height: 92vh; }
+  .modal-head, .modal-body, .modal-foot { padding-left: 14px; padding-right: 14px; }
+  .modal-foot { flex-wrap: wrap; }
+
+  /* 统计卡片 */
+  .stat-cards { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat-num { font-size: 1.35rem; }
+  .stat-card { padding: 14px 8px; }
+
+  /* 日历条目 */
+  .cal-slot { flex-direction: column; align-items: flex-start; gap: 6px; }
+
+  /* 设备添加栏 */
+  .device-add { flex-direction: column; }
+
+  /* 分页 */
+  .pagination { flex-wrap: wrap; gap: 8px; font-size: 0.85em; }
+
+  .btn { padding: 9px 14px; }
+}
+
+@media (max-width: 480px) {
+  .topbar-title { font-size: 0.85rem; }
+  .topbar-name { display: none; }
+  .stat-cards { grid-template-columns: repeat(2, 1fr); }
+  .toolbar-controls select, .toolbar-controls input { flex: 1 1 100%; }
+  .btn-sm { padding: 6px 10px; }
 }
