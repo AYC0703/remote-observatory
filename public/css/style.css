@@ -151,6 +151,7 @@ input, select, textarea { font-family: inherit; }
 /* ---------- 弹窗 ---------- */
 .modal-mask { position: fixed; inset: 0; background: rgba(4,8,18,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
 .modal { width: 100%; max-width: 640px; max-height: 90vh; overflow: auto; background: var(--card); border: 1px solid var(--border); border-radius: 14px; }
+.modal-sm { max-width: 400px; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--card); }
 .modal-head h3 { margin: 0; }
 .modal-close { background: transparent; border: none; color: var(--muted); font-size: 1.1rem; }

@@ -62,6 +62,10 @@ const app = Vue.createApp({
       editingId: null,
       addingDevice: false,
       deviceError: '',
+      pwdForm: { old_password: '', new_password: '', confirm: '' },
+      pwdError: '',
+      pwdSubmitting: false,
+      showPwdModal: false,
       charts: {}
     };
   },
@@ -151,6 +155,29 @@ const app = Vue.createApp({
       this.form = { device: '', start_time: '', end_time: '', target: '', purpose: '', applicant_name: '', applicant_contact: '' };
       this.formError = ''; this.conflicts = [];
       this.detailApp = null; this.reviewApp = null;
+      this.showPwdModal = false;
+    },
+
+    openPwdModal: function () {
+      this.pwdForm = { old_password: '', new_password: '', confirm: '' };
+      this.pwdError = '';
+      this.showPwdModal = true;
+    },
+
+    closePwdModal: function () { this.showPwdModal = false; },
+
+    async changePassword() {
+      this.pwdError = '';
+      if (!this.pwdForm.old_password) { this.pwdError = '请输入当前密码'; return; }
+      if (this.pwdForm.new_password.length < 6) { this.pwdError = '新密码至少 6 位'; return; }
+      if (this.pwdForm.new_password !== this.pwdForm.confirm) { this.pwdError = '两次输入的新密码不一致'; return; }
+      this.pwdSubmitting = true;
+      try {
+        await api('/api/auth/change-password', { method: 'POST', body: { old_password: this.pwdForm.old_password, new_password: this.pwdForm.new_password } });
+        this.showToast('密码修改成功', 'success');
+        this.closePwdModal();
+      } catch (e) { this.pwdError = e.message; }
+      finally { this.pwdSubmitting = false; }
     },
 
     go: function (view) {

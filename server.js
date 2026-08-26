@@ -102,6 +102,20 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user: req.session.user || null });
 });
 
+app.post('/api/auth/change-password', requireAuth, (req, res) => {
+  const oldPwd = String((req.body || {}).old_password || '');
+  const newPwd = String((req.body || {}).new_password || '');
+  if (!oldPwd) return res.status(400).json({ error: '请输入当前密码' });
+  if (newPwd.length < 6) return res.status(400).json({ error: '新密码至少 6 位' });
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  if (!row || !verifyPassword(oldPwd, row.password_hash)) {
+    return res.status(400).json({ error: '当前密码错误' });
+  }
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPwd), req.session.user.id);
+  addAudit(req.session.user, 'change_password', '修改密码');
+  res.json({ ok: true });
+});
+
 app.get('/api/devices', (req, res) => {
   const devices = db.prepare('SELECT d.id, d.name, (SELECT COUNT(*) FROM applications a WHERE a.device = d.name) AS count FROM devices d ORDER BY d.id').all();
   res.json({ devices });

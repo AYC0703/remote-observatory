@@ -62,6 +62,7 @@
         <div class="topbar-user">
           <span class="badge" :class="user.role==='admin' ? 'badge-admin' : 'badge-user'">{{user.role==='admin' ? '管理员' : '普通用户'}}</span>
           <span class="topbar-name">{{user.name}}</span>
+          <button v-if="user.role==='user'" type="button" class="btn btn-ghost btn-sm" @click="openPwdModal">修改密码</button>
           <button type="button" class="btn btn-ghost btn-sm" @click="logout">退出登录</button>
         </div>
       </header>
@@ -393,6 +394,32 @@
         <div class="modal-foot">
           <button type="button" class="btn btn-ghost" @click="closeReview">取消</button>
           <button type="button" class="btn" :class="reviewApp.action==='approve' ? 'btn-success' : 'btn-danger'" :disabled="reviewApp.submitting" @click="doReview">{{reviewApp.submitting ? '提交中…' : (reviewApp.action==='approve' ? '确认同意' : '确认驳回')}}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 修改密码弹窗 ===================== -->
+    <div v-if="showPwdModal" class="modal-mask" @click.self="closePwdModal">
+      <div class="modal modal-sm">
+        <div class="modal-head"><h3>修改密码</h3><button type="button" class="modal-close" @click="closePwdModal">✕</button></div>
+        <div class="modal-body">
+          <div class="field">
+            <label>当前密码 <span class="req">*</span></label>
+            <input type="password" v-model.trim="pwdForm.old_password" placeholder="请输入当前密码">
+          </div>
+          <div class="field">
+            <label>新密码 <span class="req">*</span> <span class="muted">(至少 6 位)</span></label>
+            <input type="password" v-model.trim="pwdForm.new_password" placeholder="请输入新密码">
+          </div>
+          <div class="field">
+            <label>确认新密码 <span class="req">*</span></label>
+            <input type="password" v-model.trim="pwdForm.confirm" placeholder="再次输入新密码">
+          </div>
+          <div v-if="pwdError" class="alert alert-error">{{pwdError}}</div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost" @click="closePwdModal">取消</button>
+          <button type="button" class="btn btn-primary" :disabled="pwdSubmitting" @click="changePassword">{{pwdSubmitting ? '提交中…' : '确认修改'}}</button>
         </div>
       </div>
     </div>
