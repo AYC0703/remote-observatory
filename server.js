@@ -1,6 +1,8 @@
 const express = require('express');
 const session = require('express-session');
 const path = require('node:path');
+const crypto = require('node:crypto');
+const rateLimit = require('express-rate-limit');
 const { db, now, hashPassword, verifyPassword } = require('./db');
 
 const app = express();
@@ -9,13 +11,32 @@ const PORT = process.env.PORT || 3000;
 const STATUS_LABEL = { pending: '待审批', approved: '已通过', rejected: '未通过', withdrawn: '已撤回' };
 
 app.use(express.json({ limit: '1mb' }));
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.SESSION_SECRET) {
+  console.log('[warn] 未设置 SESSION_SECRET，本次启动使用随机密钥（重启后所有会话失效），生产环境请通过环境变量指定');
+}
+
 app.use(session({
   name: 'observatory.sid',
-  secret: 'remote-observatory-secret-2025',
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 }
+  cookie: {
+    httpOnly: true,
+    sameSite: process.env.COOKIE_SAMESITE || 'lax',
+    secure: process.env.COOKIE_SECURE === 'true',
+    maxAge: 1000 * 60 * 60 * 24
+  }
 }));
+
+// 认证接口限速：防暴力破解（登录/注册/改密）
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: '尝试次数过多，请 15 分钟后再试' }
+});
 
 const APP_COLS = [
   'a.id', 'a.app_no', 'a.user_id', 'a.applicant_name', 'a.applicant_contact',
@@ -62,7 +83,7 @@ function requireAdmin(req, res, next) {
 }
 
 // ---------- 认证 ----------
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', authLimiter, (req, res) => {
   const { username, password, name } = req.body || {};
   const uname = String(username || '').trim();
   const pwd = String(password || '');
@@ -75,12 +96,15 @@ app.post('/api/auth/register', (req, res) => {
   const info = db.prepare('INSERT INTO users (username, password_hash, name, role, created_at) VALUES (?, ?, ?, ?, ?)')
     .run(uname, hashPassword(pwd), dispName, 'user', now());
   const user = { id: Number(info.lastInsertRowid), username: uname, name: dispName, role: 'user' };
-  req.session.user = user;
-  addAudit(user, 'register', '用户注册');
-  res.json({ user });
+  req.session.regenerate(function (err) {
+    if (err) return res.status(500).json({ error: '登录失败' });
+    req.session.user = user;
+    addAudit(user, 'register', '用户注册');
+    res.json({ user });
+  });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', authLimiter, (req, res) => {
   const { username, password } = req.body || {};
   const uname = String(username || '').trim();
   const row = db.prepare('SELECT * FROM users WHERE username = ?').get(uname);
@@ -88,9 +112,12 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(401).json({ error: '用户名或密码错误' });
   }
   const user = { id: Number(row.id), username: row.username, name: row.name, role: row.role };
-  req.session.user = user;
-  addAudit(user, 'login', '登录系统');
-  res.json({ user });
+  req.session.regenerate(function (err) {
+    if (err) return res.status(500).json({ error: '登录失败' });
+    req.session.user = user;
+    addAudit(user, 'login', '登录系统');
+    res.json({ user });
+  });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -102,7 +129,7 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user: req.session.user || null });
 });
 
-app.post('/api/auth/change-password', requireAuth, (req, res) => {
+app.post('/api/auth/change-password', requireAuth, authLimiter, (req, res) => {
   const oldPwd = String((req.body || {}).old_password || '');
   const newPwd = String((req.body || {}).new_password || '');
   if (!oldPwd) return res.status(400).json({ error: '请输入当前密码' });
@@ -292,7 +319,8 @@ app.get('/api/admin/export.csv', requireAdmin, (req, res) => {
   const rows = db.prepare('SELECT ' + APP_COLS + ' ' + APP_FROM + ' ORDER BY a.created_at ASC').all();
   const header = ['申请编号','申请人','申请人账号','联系方式','观测设备','开始时间','结束时间','拍摄目标','拍摄目的','状态','提交时间','审批时间','审批人','审批意见'];
   const esc = function (v) {
-    const s = v === null || v === undefined ? '' : String(v);
+    let s = v === null || v === undefined ? '' : String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
     if (/[\",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
@@ -330,7 +358,11 @@ app.use((err, req, res, next) => {
 
 const server = app.listen(PORT, () => {
   console.log('远程天文台系统已启动: http://localhost:' + PORT);
-  console.log('管理员账号: admin / admin123');
+  if (process.env.ADMIN_PASSWORD) {
+    console.log('管理员账号: admin（密码由环境变量 ADMIN_PASSWORD 指定）');
+  } else {
+    console.log('管理员账号: admin / admin123（默认密码，生产请设置 ADMIN_PASSWORD）');
+  }
 });
 
 server.on('error', (err) => {

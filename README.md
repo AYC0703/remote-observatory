@@ -32,7 +32,8 @@
 ## 技术栈
 - 后端：Node.js + Express + SQLite（Node 内置 node:sqlite，零原生依赖）
 - 前端：Vue 3（本地化 CDN）+ Chart.js
-- 认证：Session + scrypt 密码哈希
+- 认证：Session + scrypt 密码哈希（带盐、常量时间比较）
+- 安全：参数化查询防 SQL 注入、认证接口限速、防会话固定、CSV 公式注入防护
 
 ## 快速开始
 
@@ -42,8 +43,22 @@
 
 启动后浏览器访问 http://localhost:3000
 
+## 环境变量（生产部署必读）
+
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| PORT | 监听端口 | 3000 |
+| SESSION_SECRET | 会话签名密钥，生产必须设置（可用 openssl rand -hex 32 生成） | 未设置时每次启动随机生成（重启后会话失效） |
+| ADMIN_PASSWORD | 管理员初始密码（仅首次建库时生效） | admin123 |
+| COOKIE_SECURE | 设为 true 后 cookie 仅经 HTTPS 传输 | false |
+| COOKIE_SAMESITE | 同站策略，可设 lax / strict | lax |
+
+示例：
+
+    SESSION_SECRET=$(openssl rand -hex 32) ADMIN_PASSWORD=你的强密码 npm start
+
 ## 演示账号
-- 管理员：admin / admin123
+- 管理员：admin / admin123（若设置了 ADMIN_PASSWORD 环境变量，则以该值为准）
 - 普通用户：可自助注册，或使用已内置的 alice / 123456
 
 ## 项目结构
@@ -61,7 +76,7 @@
 
 ## 数据重置
 
-删除 data/observatory.db 后重启服务即可恢复全新环境（会自动重建管理员账号 admin / admin123）。
+删除 data/observatory.db 后重启服务即可恢复全新环境（会自动重建管理员账号，密码取 ADMIN_PASSWORD 或默认 admin123）。
 
 ## 主要 API
 

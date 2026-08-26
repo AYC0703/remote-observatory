@@ -89,9 +89,13 @@ function verifyPassword(pw, stored) {
 function seedAdmin() {
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
   if (!existing) {
+    const initialPwd = process.env.ADMIN_PASSWORD || 'admin123';
     db.prepare('INSERT INTO users (username, password_hash, name, role, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run('admin', hashPassword('admin123'), '系统管理员', 'admin', now());
-    console.log('[seed] 管理员账号已创建: admin / admin123');
+      .run('admin', hashPassword(initialPwd), '系统管理员', 'admin', now());
+    console.log('[seed] 管理员账号已创建: admin / ' + initialPwd);
+    if (!process.env.ADMIN_PASSWORD) {
+      console.log('[warn] 未设置 ADMIN_PASSWORD，已使用默认密码，生产环境请通过环境变量 ADMIN_PASSWORD 指定');
+    }
   }
 }
 seedAdmin();
