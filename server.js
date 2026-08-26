@@ -359,7 +359,7 @@ app.use((err, req, res, next) => {
 const server = app.listen(PORT, () => {
   console.log('远程天文台系统已启动: http://localhost:' + PORT);
   if (process.env.ADMIN_PASSWORD) {
-    console.log('管理员账号: admin（密码由环境变量 ADMIN_PASSWORD 指定）');
+    console.log('管理员账号: admin（密码 = 环境变量 ADMIN_PASSWORD）');
   } else {
     console.log('管理员账号: admin / admin123（默认密码，生产请设置 ADMIN_PASSWORD）');
   }

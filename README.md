@@ -49,7 +49,7 @@
 | --- | --- | --- |
 | PORT | 监听端口 | 3000 |
 | SESSION_SECRET | 会话签名密钥，生产必须设置（可用 openssl rand -hex 32 生成） | 未设置时每次启动随机生成（重启后会话失效） |
-| ADMIN_PASSWORD | 管理员初始密码（仅首次建库时生效） | admin123 |
+| ADMIN_PASSWORD | 管理员密码，设置后每次启动会同步为该值 | admin123 |
 | COOKIE_SECURE | 设为 true 后 cookie 仅经 HTTPS 传输 | false |
 | COOKIE_SAMESITE | 同站策略，可设 lax / strict | lax |
 
